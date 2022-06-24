@@ -94,7 +94,6 @@ defmodule Porter do
           Lock.lock()
 
           _play(id)
-          |> IO.inspect(label: "play executed")
       end
     end
 
