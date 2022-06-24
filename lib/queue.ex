@@ -9,8 +9,8 @@ defmodule Queue do
     Agent.get(__MODULE__, fn list -> List.first(list, []) end)
   end
 
-  def get_all do
-    Agent.get(__MODULE__, fn list -> list end)
+  def print_queue do
+    Agent.get(__MODULE__, fn list -> Enum.map(list, fn {_x, y} -> "#{y}\n" end) end)
   end
 
   def add(url) do
