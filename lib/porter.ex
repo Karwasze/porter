@@ -117,7 +117,7 @@ defmodule Porter do
 
       case queue do
         [] ->
-          Lock.unlock()
+          Lock.unlock(id)
           nil
 
         {url, _name} ->
