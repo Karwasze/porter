@@ -11,7 +11,8 @@ defmodule Porter do
 
     Cogs.def play("") do
       {:ok, id} = Cogs.guild_id()
-      channel = Channel.get()
+
+      channel = Channel.get(id)
 
       case channel do
         nil ->
@@ -24,7 +25,8 @@ defmodule Porter do
 
     Cogs.def play(query) do
       {:ok, id} = Cogs.guild_id()
-      channel = Channel.get()
+
+      channel = Channel.get(id)
 
       case channel do
         nil ->
@@ -32,7 +34,10 @@ defmodule Porter do
 
         _ ->
           {url, name} = Utils.search(query)
-          Queue.add({url, name})
+
+          Queue.add(id, {url, name})
+          id |> IO.inspect()
+
           Cogs.say("#{name} - #{url} added")
           _handle_lock(id)
       end
@@ -41,30 +46,31 @@ defmodule Porter do
     Cogs.def stop do
       {:ok, id} = Cogs.guild_id()
 
-      StopReason.set_stopped()
+      StopReason.set_stopped(id)
 
       Voice.stop_audio(id)
-      {_url, name} = Queue.get()
+      {_url, name} = Queue.get(id)
       Cogs.say("#{name} stopped")
     end
 
     Cogs.def skip do
       {:ok, id} = Cogs.guild_id()
 
-      StopReason.set_skipped()
+      StopReason.set_skipped(id)
 
       Voice.stop_audio(id)
-      {_url, name} = Queue.get()
+      {_url, name} = Queue.get(id)
       Cogs.say("#{name} skipped")
     end
 
     Cogs.def queue do
-      queue = Queue.print_queue()
+      {:ok, id} = Cogs.guild_id()
+      queue = Queue.print_queue(id)
 
       msg =
         case queue do
           [] -> "Queue is empty, add a song using !play <query> command!"
-          _ -> "Queue:\n #{queue}"
+          _ -> "Queue:\n#{queue}"
         end
 
       Cogs.say(msg)
@@ -80,18 +86,22 @@ defmodule Porter do
     end
 
     Cogs.def setchannel(channel_name) do
-      Channel.set(channel_name)
+      {:ok, id} = Cogs.guild_id()
+      Queue.init(id)
+      Lock.init(id)
+      StopReason.init(id)
+      Channel.set(id, channel_name)
       Cogs.say("Channel name set to #{channel_name}")
     end
 
     defp _handle_lock(id) do
-      case Lock.get() do
+      case Lock.get(id) do
         :locked ->
           nil
 
         :unlocked ->
-          StopReason.set_finished()
-          Lock.lock()
+          StopReason.set_finished(id)
+          Lock.lock(id)
 
           _play(id)
       end
@@ -99,11 +109,11 @@ defmodule Porter do
 
     defp _play(id) do
       {:ok, channels} = Client.get_channels(id)
-      channel = Channel.get()
+      channel = Channel.get(id)
       default_voice_channel = Enum.find(channels, &match?(%{name: ^channel}, &1))
       Voice.join(id, default_voice_channel.id)
 
-      queue = Queue.get()
+      queue = Queue.get(id)
 
       case queue do
         [] ->
@@ -113,21 +123,21 @@ defmodule Porter do
           Voice.play_url(id, url)
           Voice.wait_for_end(id)
 
-          case StopReason.get() do
+          case StopReason.get(id) do
             :stopped ->
-              Lock.unlock()
+              Lock.unlock(id)
 
             :skipped ->
-              Queue.remove()
+              Queue.remove(id)
 
-              Lock.unlock()
+              Lock.unlock(id)
 
               _handle_lock(id)
 
             :finished ->
-              Queue.remove()
+              Queue.remove(id)
 
-              Lock.unlock()
+              Lock.unlock(id)
 
               _handle_lock(id)
           end

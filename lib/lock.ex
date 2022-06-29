@@ -2,18 +2,22 @@ defmodule Lock do
   use Agent
 
   def start_link(_opts) do
-    Agent.start_link(fn -> :unlocked end, name: __MODULE__)
+    Agent.start_link(fn -> %{} end, name: __MODULE__)
   end
 
-  def get do
-    Agent.get(__MODULE__, fn x -> x end)
+  def init(id) do
+    Agent.update(__MODULE__, fn map -> Map.put_new(map, id, :unlocked) end)
   end
 
-  def lock() do
-    Agent.update(__MODULE__, fn _x -> :locked end)
+  def get(id) do
+    Agent.get(__MODULE__, fn map -> Map.get(map, id) end)
   end
 
-  def unlock() do
-    Agent.update(__MODULE__, fn _x -> :unlocked end)
+  def lock(id) do
+    Agent.update(__MODULE__, fn map -> Map.put(map, id, :locked) end)
+  end
+
+  def unlock(id) do
+    Agent.update(__MODULE__, fn map -> Map.put(map, id, :unlocked) end)
   end
 end
