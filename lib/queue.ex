@@ -14,9 +14,12 @@ defmodule Queue do
   end
 
   def print_queue(id) do
-    Agent.get(__MODULE__, fn map ->
-      Map.get(map, id) |> Enum.map(fn {_x, y} -> "#{y}\n" end)
-    end)
+    current = Agent.get(__MODULE__, fn map -> Map.get(map, id) end)
+
+    case current do
+      nil -> []
+      value -> Enum.map(fn {_x, y} = value -> "#{y}\n" end)
+    end
   end
 
   def add(id, url) do
