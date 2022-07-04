@@ -27,9 +27,6 @@ defmodule Queue do
     end
   end
 
-  def print_queue(id) do
-  end
-
   def add(id, url) do
     current = Agent.get(__MODULE__, fn map -> Map.get(map, id) end)
     Agent.update(__MODULE__, fn map -> Kernel.put_in(map[id], current ++ [url]) end)
