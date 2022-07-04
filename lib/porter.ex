@@ -36,7 +36,6 @@ defmodule Porter do
           {url, name} = Utils.search(query)
 
           Queue.add(id, {url, name})
-          id |> IO.inspect()
 
           Cogs.say("#{name} - #{url} added")
           _handle_lock(id)
@@ -78,6 +77,7 @@ defmodule Porter do
 
     Cogs.def leave do
       {:ok, id} = Cogs.guild_id()
+      StopReason.set_stopped(id)
       Voice.stop_audio(id)
       Queue.remove_all(id)
       Voice.leave(id)
