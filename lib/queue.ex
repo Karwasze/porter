@@ -10,12 +10,12 @@ defmodule Queue do
   end
 
   def get(id) do
-    Agent.get(__MODULE__, fn map -> Map.get(map, id, []) |> List.first([]) end)
+    Agent.get(__MODULE__, fn map -> Map.get(map, id) |> List.first([]) end)
   end
 
   def print_queue(id) do
     Agent.get(__MODULE__, fn map ->
-      Map.fetch!(map, id) |> Enum.map(fn {_x, y} -> "#{y}\n" end)
+      Map.get(map, id) |> Enum.map(fn {_x, y} -> "#{y}\n" end)
     end)
   end
 
