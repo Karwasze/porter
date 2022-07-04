@@ -10,7 +10,7 @@ defmodule Queue do
   end
 
   def get(id) do
-    Agent.get(__MODULE__, fn map -> Map.get(map, id) |> List.first([]) end)
+    Agent.get(__MODULE__, fn map -> Map.get(map, id, []) |> List.first([]) end)
   end
 
   def print_queue(id) do
