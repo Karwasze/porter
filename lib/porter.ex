@@ -78,11 +78,9 @@ defmodule Porter do
 
     Cogs.def leave do
       {:ok, id} = Cogs.guild_id()
-
-      case Voice.leave(id) do
-        :ok -> nil
-        {:error, error} -> Cogs.say("Oops #{error}")
-      end
+      Voice.stop_audio(id)
+      Queue.remove_all(id)
+      Voice.leave(id)
     end
 
     Cogs.def setchannel(channel_name) do

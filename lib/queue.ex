@@ -28,4 +28,8 @@ defmodule Queue do
     current = Agent.get(__MODULE__, fn map -> Map.get(map, id) end)
     Agent.update(__MODULE__, fn map -> Kernel.put_in(map[id], List.delete_at(current, 0)) end)
   end
+
+  def remove_all(id) do
+    Agent.update(__MODULE__, fn map -> Kernel.put_in(map[id], []) end)
+  end
 end
