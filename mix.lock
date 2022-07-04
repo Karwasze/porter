@@ -1,5 +1,5 @@
 %{
-  "alchemy": {:git, "https://github.com/Karwasze/alchemy.git", "fce6e6f8e0abcf1497e6bd53f1be2d58e3580320", []},
+  "alchemy": {:git, "https://github.com/dongmaster/alchemy.git", "0acb0089a136e56831406f2c5420bab5ac881699", []},
   "certifi": {:hex, :certifi, "2.9.0", "6f2a475689dd47f19fb74334859d460a2dc4e3252a3324bd2111b8f0429e7e21", [:rebar3], [], "hexpm", "266da46bdb06d6c6d35fde799bcb28d36d985d424ad7c08b5bb48f5b5cdd4641"},
   "chacha20": {:hex, :chacha20, "1.0.3", "26372176993172260968b36b4e7bc2e007e6b2b397ae08083e4836df67cdf03c", [:mix], [], "hexpm", "27f23b680e63f04b5bced77a9d8867033b381c091f92d544de0ad93accfb7cec"},
   "curve25519": {:hex, :curve25519, "1.0.4", "e570561b832c29b3ce4fd8b9fcd9c9546916188860568f1c1fc9428d7cb00894", [:mix], [], "hexpm", "1a068bf9646e7067bf6aa5bf802b404002734e09bb5300f098109df03e31f9f5"},
