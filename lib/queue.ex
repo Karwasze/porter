@@ -18,7 +18,7 @@ defmodule Queue do
 
     case current do
       nil ->
-        Agent.get(__MODULE__, fn map -> [] end)
+        Agent.get(__MODULE__, fn _ -> [] end)
 
       _ ->
         Agent.get(__MODULE__, fn map ->

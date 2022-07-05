@@ -116,6 +116,7 @@ defmodule Porter do
       case queue do
         [] ->
           Lock.unlock(id)
+          Voice.leave(id)
           nil
 
         {url, _name} ->
