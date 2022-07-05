@@ -19,7 +19,6 @@ defmodule Utils do
           |> Enum.join(" ")
 
         {url, name}
-        |> IO.inspect()
 
       {error, _} ->
         {:err, error}

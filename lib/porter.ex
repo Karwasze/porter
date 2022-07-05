@@ -1,164 +1,173 @@
-defmodule Porter do
-  use Application
-  alias Alchemy.Client
+defmodule AudioPlayerSupervisor do
+  use Supervisor
 
-  defmodule Commands do
-    use Alchemy.Cogs
-    alias Alchemy.Voice
-    alias Alchemy.Client
+  def start(_mode, args) do
+    Supervisor.start_link(__MODULE__, args, name: __MODULE__)
+  end
 
-    Cogs.set_parser(:play, &List.wrap/1)
+  def start_link(args) do
+    Supervisor.start_link(__MODULE__, args, name: __MODULE__)
+  end
 
-    Cogs.def play("") do
-      {:ok, id} = Cogs.guild_id()
+  @impl true
+  def init(_init_arg) do
+    children = [AudioPlayerConsumer, Queue, StopReason]
 
-      channel = Channel.get(id)
+    Supervisor.init(children, strategy: :one_for_one)
+  end
+end
 
-      case channel do
-        nil ->
-          Cogs.say("Define channel name first using !setchannel command")
+defmodule AudioPlayerConsumer do
+  use Nostrum.Consumer
 
-        _ ->
-          _handle_lock(id)
-      end
-    end
+  alias Nostrum.Api
+  alias Nostrum.Cache.GuildCache
+  alias Nostrum.Voice
 
-    Cogs.def play(query) do
-      {:ok, id} = Cogs.guild_id()
+  require Logger
 
-      channel = Channel.get(id)
+  def start_link do
+    Consumer.start_link(__MODULE__)
+  end
 
-      case channel do
-        nil ->
-          Cogs.say("Define channel name first using !setchannel command")
+  def init_queue(guild_id) do
+    Queue.init(guild_id)
+    guild_id |> IO.inspect(label: "guild id: ")
+  end
 
-        _ ->
-          {url, name} = Utils.search(query)
+  def get_voice_channel_of_interaction(guild_id, user_id) do
+    guild_id
+    |> GuildCache.get!()
+    |> Map.get(:voice_states)
+    |> Enum.find(%{}, fn v -> v.user_id == user_id end)
+    |> Map.get(:channel_id)
+  end
 
-          Queue.add(id, {url, name})
-          id |> IO.inspect()
+  def wait_for_join(msg) do
+    Process.sleep(100)
+    ready? = Voice.ready?(msg.guild_id)
 
-          Cogs.say("#{name} - #{url} added")
-          _handle_lock(id)
-      end
-    end
-
-    Cogs.def stop do
-      {:ok, id} = Cogs.guild_id()
-
-      StopReason.set_stopped(id)
-
-      Voice.stop_audio(id)
-      {_url, name} = Queue.get(id)
-      Cogs.say("#{name} stopped")
-    end
-
-    Cogs.def skip do
-      {:ok, id} = Cogs.guild_id()
-
-      StopReason.set_skipped(id)
-
-      Voice.stop_audio(id)
-      {_url, name} = Queue.get(id)
-      Cogs.say("#{name} skipped")
-    end
-
-    Cogs.def queue do
-      {:ok, id} = Cogs.guild_id()
-      queue = Queue.print_queue(id)
-
-      msg =
-        case queue do
-          [] -> "Queue is empty, add a song using !play <query> command!"
-          _ -> "Queue:\n#{queue}"
-        end
-
-      Cogs.say(msg)
-    end
-
-    Cogs.def leave do
-      {:ok, id} = Cogs.guild_id()
-
-      case Voice.leave(id) do
-        :ok -> nil
-        {:error, error} -> Cogs.say("Oops #{error}")
-      end
-    end
-
-    Cogs.def setchannel(channel_name) do
-      {:ok, id} = Cogs.guild_id()
-      Queue.init(id)
-      Lock.init(id)
-      StopReason.init(id)
-      Channel.set(id, channel_name)
-      Cogs.say("Channel name set to #{channel_name}")
-    end
-
-    defp _handle_lock(id) do
-      case Lock.get(id) do
-        :locked ->
-          nil
-
-        :unlocked ->
-          StopReason.set_finished(id)
-          Lock.lock(id)
-
-          _play(id)
-      end
-    end
-
-    defp _play(id) do
-      {:ok, channels} = Client.get_channels(id)
-      channel = Channel.get(id)
-      default_voice_channel = Enum.find(channels, &match?(%{name: ^channel}, &1))
-      Voice.join(id, default_voice_channel.id)
-
-      queue = Queue.get(id)
-
-      case queue do
-        [] ->
-          Lock.unlock(id)
-          nil
-
-        {url, _name} ->
-          Voice.play_url(id, url)
-          Voice.wait_for_end(id)
-
-          case StopReason.get(id) do
-            :stopped ->
-              Lock.unlock(id)
-
-            :skipped ->
-              Queue.remove(id)
-
-              Lock.unlock(id)
-
-              _handle_lock(id)
-
-            :finished ->
-              Queue.remove(id)
-
-              Lock.unlock(id)
-
-              _handle_lock(id)
-          end
-      end
+    if ready? do
+      :ok
+    else
+      wait_for_join(msg)
     end
   end
 
-  def start(_type, _args) do
-    token = Application.fetch_env!(:porter, :discord_token)
-    run = Client.start(token)
+  def wait_for_end(msg) do
+    Process.sleep(1000)
 
-    children = [
-      Queue,
-      Lock,
-      StopReason,
-      Channel
-    ]
+    playing? = Voice.playing?(msg.guild_id)
 
-    {:ok, _pid} = Supervisor.start_link(children, strategy: :one_for_all)
-    use Commands
-    run
+    if playing? do
+      wait_for_end(msg)
+    else
+      :ok
+    end
+  end
+
+  def handle_lock(msg) do
+    if Voice.playing?(msg.guild_id) do
+      nil
+    else
+      play(msg)
+    end
+  end
+
+  def play(msg) do
+    queue = Queue.get(msg.guild_id)
+
+    case queue do
+      [] ->
+        nil
+
+      {url, _name} ->
+        Voice.play(msg.guild_id, url, :ytdl)
+        wait_for_end(msg)
+
+        case StopReason.get(msg.guild_id) do
+          :stopped ->
+            nil
+
+          :skipped ->
+            Queue.remove(msg.guild_id)
+            play(msg)
+
+          :finished ->
+            Queue.remove(msg.guild_id)
+            play(msg)
+        end
+    end
+  end
+
+  def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
+    case msg.content do
+      "!play" ->
+        case get_voice_channel_of_interaction(msg.guild_id, msg.author.id) do
+          nil ->
+            Api.create_message!(msg.channel_id, "You must be in a voice channel to summon me")
+
+          voice_channel ->
+            Voice.join_channel(msg.guild_id, voice_channel)
+            wait_for_join(msg)
+            handle_lock(msg)
+        end
+
+      "!play" <> query ->
+        case get_voice_channel_of_interaction(msg.guild_id, msg.author.id) do
+          nil ->
+            Api.create_message!(msg.channel_id, "You must be in a voice channel to summon me")
+
+          voice_channel ->
+            Voice.join_channel(msg.guild_id, voice_channel)
+            wait_for_join(msg)
+            {url, name} = Utils.search(query)
+            Queue.add(msg.guild_id, {url, name})
+            Api.create_message(msg.channel_id, "#{name} - #{url} added")
+            handle_lock(msg)
+        end
+
+      "!stop" ->
+        StopReason.set_stopped(msg.guild_id)
+        Voice.stop(msg.guild_id)
+        {_url, name} = Queue.get(msg.guild_id)
+        Api.create_message(msg.channel_id, "#{name} stopped")
+
+      "!skip" ->
+        StopReason.set_skipped(msg.guild_id)
+        Voice.stop(msg.guild_id)
+        {_url, name} = Queue.get(msg.guild_id)
+        Api.create_message(msg.channel_id, "#{name} skipped")
+
+      "!leave" ->
+        StopReason.set_stopped(msg.guild_id)
+        Voice.stop(msg.guild_id)
+        Queue.remove_all(msg.guild_id)
+        Voice.leave_channel(msg.guild_id)
+
+      "!queue" ->
+        queue = Queue.print_queue(msg.guild_id)
+
+        message =
+          case queue do
+            [] -> "Queue is empty"
+            _ -> "Queue:\n#{queue}"
+          end
+
+        Api.create_message!(msg.channel_id, message)
+
+      _ ->
+        :ignore
+    end
+  end
+
+  def handle_event({:READY, %{guilds: guilds} = _event, _ws_state}) do
+    guilds
+    |> Enum.map(fn guild -> guild.id end)
+    |> Enum.each(&init_queue/1)
+  end
+
+  def handle_event(_event) do
+    :noop
   end
 end
