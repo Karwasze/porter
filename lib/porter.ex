@@ -74,56 +74,62 @@ defmodule AudioPlayerConsumer do
     end
   end
 
+  def add_to_queue(msg, query) do
+    {url, name} = Utils.search(query)
+    Queue.add(msg.guild_id, {url, name})
+    Api.create_message(msg.channel_id, "#{name} - #{url} added")
+  end
+
   def play(msg) do
     queue = Queue.get(msg.guild_id)
 
-    case queue do
-      [] ->
-        nil
+    with {url, _name} <- queue do
+      Voice.play(msg.guild_id, url, :ytdl)
+      wait_for_end(msg)
 
-      {url, _name} ->
-        Voice.play(msg.guild_id, url, :ytdl)
-        wait_for_end(msg)
+      case StopReason.get(msg.guild_id) do
+        :stopped ->
+          nil
 
-        case StopReason.get(msg.guild_id) do
-          :stopped ->
-            nil
+        :skipped ->
+          Queue.remove(msg.guild_id)
+          play(msg)
 
-          :skipped ->
-            Queue.remove(msg.guild_id)
-            play(msg)
-
-          :finished ->
-            Queue.remove(msg.guild_id)
-            play(msg)
-        end
+        :finished ->
+          Queue.remove(msg.guild_id)
+          play(msg)
+      end
+    else
+      [] -> nil
     end
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
       "!play" ->
-        case get_voice_channel_of_interaction(msg.guild_id, msg.author.id) do
+        voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+
+        case voice_channel do
           nil ->
             Api.create_message!(msg.channel_id, "You must be in a voice channel to summon me")
 
-          voice_channel ->
-            Voice.join_channel(msg.guild_id, voice_channel)
+          voice_channel_id ->
+            Voice.join_channel(msg.guild_id, voice_channel_id)
             wait_for_join(msg)
             handle_lock(msg)
         end
 
       "!play" <> query ->
-        case get_voice_channel_of_interaction(msg.guild_id, msg.author.id) do
+        voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+
+        case voice_channel do
           nil ->
             Api.create_message!(msg.channel_id, "You must be in a voice channel to summon me")
 
-          voice_channel ->
-            Voice.join_channel(msg.guild_id, voice_channel)
+          voice_channel_id ->
+            Voice.join_channel(msg.guild_id, voice_channel_id)
             wait_for_join(msg)
-            {url, name} = Utils.search(query)
-            Queue.add(msg.guild_id, {url, name})
-            Api.create_message(msg.channel_id, "#{name} - #{url} added")
+            add_to_queue(msg, query)
             handle_lock(msg)
         end
 
