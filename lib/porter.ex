@@ -152,15 +152,16 @@ defmodule AudioPlayerConsumer do
 
         playing? = Voice.playing?(msg.guild_id)
 
+        Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
+
         if playing? do
           Voice.stop(msg.guild_id)
         else
           StopReason.set_skipped(msg.guild_id)
           Queue.remove(msg.guild_id)
+
           handle_lock(msg)
         end
-
-        Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
 
       "!leave" ->
         StopReason.set_stopped(msg.guild_id)
