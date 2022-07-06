@@ -70,9 +70,7 @@ defmodule AudioPlayerConsumer do
 
   def handle_stop_reason(_, msg) do
     Queue.remove(msg.guild_id)
-
     Lock.unlock(msg.guild_id)
-
     handle_lock(msg)
   end
 
