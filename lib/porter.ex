@@ -77,13 +77,14 @@ defmodule AudioPlayerConsumer do
   def add_to_queue(msg, query) do
     {url, name} = Utils.search(query)
     Queue.add(msg.guild_id, {url, name})
-    Api.create_message(msg.channel_id, "#{name} - #{url} added")
+    Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
   end
 
   def play(msg) do
     queue = Queue.get(msg.guild_id)
 
-    with {url, _name} <- queue do
+    with {url, name} <- queue do
+      Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url} added")
       Voice.play(msg.guild_id, url, :ytdl)
       wait_for_end(msg)
 
@@ -111,7 +112,10 @@ defmodule AudioPlayerConsumer do
 
         case voice_channel do
           nil ->
-            Api.create_message!(msg.channel_id, "You must be in a voice channel to summon me")
+            Api.create_message!(
+              msg.channel_id,
+              "❌ You have to be in a voice channel to play music"
+            )
 
           voice_channel_id ->
             Voice.join_channel(msg.guild_id, voice_channel_id)
@@ -124,7 +128,10 @@ defmodule AudioPlayerConsumer do
 
         case voice_channel do
           nil ->
-            Api.create_message!(msg.channel_id, "You must be in a voice channel to summon me")
+            Api.create_message!(
+              msg.channel_id,
+              "❌ You have to be in a voice channel to play music"
+            )
 
           voice_channel_id ->
             Voice.join_channel(msg.guild_id, voice_channel_id)
@@ -137,13 +144,23 @@ defmodule AudioPlayerConsumer do
         StopReason.set_stopped(msg.guild_id)
         Voice.stop(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
-        Api.create_message(msg.channel_id, "#{name} stopped")
+        Api.create_message(msg.channel_id, "⏹️ **#{name}** stopped")
 
       "!skip" ->
-        StopReason.set_skipped(msg.guild_id)
-        Voice.stop(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
-        Api.create_message(msg.channel_id, "#{name} skipped")
+        StopReason.set_skipped(msg.guild_id)
+
+        playing? = Voice.playing?(msg.guild_id)
+
+        if playing? do
+          Voice.stop(msg.guild_id)
+        else
+          StopReason.set_skipped(msg.guild_id)
+          Queue.remove(msg.guild_id)
+          handle_lock(msg)
+        end
+
+        Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
 
       "!leave" ->
         StopReason.set_stopped(msg.guild_id)
@@ -156,8 +173,8 @@ defmodule AudioPlayerConsumer do
 
         message =
           case queue do
-            [] -> "Queue is empty"
-            _ -> "Queue:\n#{queue}"
+            [] -> "ℹ️ Queue is empty, add a song using **!play <query>** command!"
+            _ -> "__Queue__:\n\n**🔊 Now playing: **#{queue}"
           end
 
         Api.create_message!(msg.channel_id, message)
