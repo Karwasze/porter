@@ -11,7 +11,7 @@ defmodule AudioPlayerSupervisor do
 
   @impl true
   def init(_init_arg) do
-    children = [AudioPlayerConsumer, Queue, StopReason]
+    children = [AudioPlayerConsumer, Queue, StopReason, Lock]
 
     Supervisor.init(children, strategy: :one_for_one)
   end
@@ -26,12 +26,19 @@ defmodule AudioPlayerConsumer do
 
   require Logger
 
+  @ended_retries 20
+  @ended_step 1000
+  @ready_retries 20
+  @ready_step 100
+
   def start_link do
     Consumer.start_link(__MODULE__)
   end
 
   def init_queue(guild_id) do
     Queue.init(guild_id)
+    StopReason.init(guild_id)
+    Lock.init(guild_id)
     guild_id |> IO.inspect(label: "guild id: ")
   end
 
@@ -43,35 +50,28 @@ defmodule AudioPlayerConsumer do
     |> Map.get(:channel_id)
   end
 
-  def wait_for_join(msg) do
-    Process.sleep(100)
-    ready? = Voice.ready?(msg.guild_id)
-
-    if ready? do
-      :ok
-    else
-      wait_for_join(msg)
-    end
-  end
-
-  def wait_for_end(msg) do
-    Process.sleep(1000)
-
-    playing? = Voice.playing?(msg.guild_id)
-
-    if playing? do
-      wait_for_end(msg)
-    else
-      :ok
+  def wait_for(function, step, retries) do
+    for _ <- 0..retries do
+      case function.() do
+        true -> :ok
+        false -> Process.sleep(step)
+      end
     end
   end
 
   def handle_lock(msg) do
-    if Voice.playing?(msg.guild_id) do
-      nil
-    else
-      play(msg)
+    case Lock.get(msg.guild_id) do
+      :locked ->
+        nil
+
+      :unlocked ->
+        StopReason.set_finished(msg.guild_id)
+        Lock.lock(msg.guild_id)
+
+        play(msg)
     end
+
+    # if(!Voice.playing?(msg.guild_id), do: play(msg))
   end
 
   def add_to_queue(msg, query) do
@@ -80,66 +80,65 @@ defmodule AudioPlayerConsumer do
     Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
   end
 
+  def handle_stop_reason(:stopped, msg), do: Lock.unlock(msg.guild_id)
+
+  def handle_stop_reason(_, msg) do
+    Queue.remove(msg.guild_id)
+    Lock.unlock(msg.guild_id)
+    handle_lock(msg)
+  end
+
+  def prepare_channel(msg, query \\ nil) do
+    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+
+    case voice_channel do
+      nil ->
+        Api.create_message!(
+          msg.channel_id,
+          "❌ You have to be in a voice channel to play music"
+        )
+
+      voice_channel_id ->
+        Voice.join_channel(msg.guild_id, voice_channel_id)
+
+        wait_for(
+          fn -> Voice.ready?(msg.guild_id) end,
+          @ready_step,
+          @ready_retries
+        )
+
+        if(query, do: add_to_queue(msg, query))
+        handle_lock(msg)
+    end
+  end
+
   def play(msg) do
     queue = Queue.get(msg.guild_id)
 
-    with {url, name} <- queue do
-      Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url}")
-      StopReason.set_finished(msg.guild_id)
-      Voice.play(msg.guild_id, url, :ytdl)
-      wait_for_end(msg)
+    case queue do
+      [] ->
+        Lock.unlock(msg.guild_id)
+        nil
 
-      case StopReason.get(msg.guild_id) do
-        :stopped ->
-          nil
+      {url, name} ->
+        Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url}")
+        StopReason.set_finished(msg.guild_id)
 
-        :skipped ->
-          Queue.remove(msg.guild_id)
-          play(msg)
+        Voice.play(msg.guild_id, url, :ytdl)
+        wait_for(fn -> !Voice.playing?(msg.guild_id) end, @ended_step, @ended_retries)
 
-        :finished ->
-          Queue.remove(msg.guild_id)
-          play(msg)
-      end
-    else
-      [] -> nil
+        StopReason.get(msg.guild_id)
+        |> handle_stop_reason(msg)
     end
   end
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
       "!play" ->
-        voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
-
-        case voice_channel do
-          nil ->
-            Api.create_message!(
-              msg.channel_id,
-              "❌ You have to be in a voice channel to play music"
-            )
-
-          voice_channel_id ->
-            Voice.join_channel(msg.guild_id, voice_channel_id)
-            wait_for_join(msg)
-            handle_lock(msg)
-        end
+        prepare_channel(msg)
 
       "!play" <> query ->
-        voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
-
-        case voice_channel do
-          nil ->
-            Api.create_message!(
-              msg.channel_id,
-              "❌ You have to be in a voice channel to play music"
-            )
-
-          voice_channel_id ->
-            Voice.join_channel(msg.guild_id, voice_channel_id)
-            wait_for_join(msg)
-            add_to_queue(msg, query)
-            handle_lock(msg)
-        end
+        prepare_channel(msg, query)
 
       "!stop" ->
         StopReason.set_stopped(msg.guild_id)
@@ -150,17 +149,15 @@ defmodule AudioPlayerConsumer do
       "!skip" ->
         {_url, name} = Queue.get(msg.guild_id)
         StopReason.set_skipped(msg.guild_id)
-
+        Api.create_message(msg.channel_id, "⏹️ **#{name}** skipped")
         playing? = Voice.playing?(msg.guild_id)
 
-        Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
-
         if playing? do
+          IO.puts("SKIPPED WHILE PLAYING")
           Voice.stop(msg.guild_id)
         else
-          StopReason.set_skipped(msg.guild_id)
+          IO.puts("SKIPPED WHILE STOPPED")
           Queue.remove(msg.guild_id)
-
           handle_lock(msg)
         end
 
