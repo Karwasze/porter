@@ -84,7 +84,8 @@ defmodule AudioPlayerConsumer do
     queue = Queue.get(msg.guild_id)
 
     with {url, name} <- queue do
-      Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url} added")
+      Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url}")
+      StopReason.set_finished(msg.guild_id)
       Voice.play(msg.guild_id, url, :ytdl)
       wait_for_end(msg)
 
