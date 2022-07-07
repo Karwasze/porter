@@ -45,7 +45,6 @@ defmodule AudioPlayerConsumer do
   def get_voice_channel_of_interaction(guild_id, user_id) do
     guild_id
     |> GuildCache.get!()
-    |> IO.inspect()
     |> Map.get(:voice_states)
     |> Enum.find(%{}, fn v -> v.user_id == user_id end)
     |> Map.get(:channel_id)
@@ -58,6 +57,18 @@ defmodule AudioPlayerConsumer do
         false -> Process.sleep(step)
       end
     end
+  end
+
+  def wait_for_end(msg) do
+    wait_for(fn -> !Voice.playing?(msg.guild_id) end, @ended_step, @ended_retries)
+  end
+
+  def wait_for_join(msg) do
+    wait_for(
+      fn -> Voice.ready?(msg.guild_id) end,
+      @ready_step,
+      @ready_retries
+    )
   end
 
   def add_to_queue(msg, query) do
@@ -81,7 +92,7 @@ defmodule AudioPlayerConsumer do
       StopReason.set_finished(msg.guild_id)
 
       Voice.play(msg.guild_id, url, :ytdl)
-      wait_for(fn -> !Voice.playing?(msg.guild_id) end, @ended_step, @ended_retries)
+      wait_for_end(msg)
 
       StopReason.get(msg.guild_id)
       |> handle_stop_reason(msg)
@@ -116,13 +127,7 @@ defmodule AudioPlayerConsumer do
 
       voice_channel_id ->
         Voice.join_channel(msg.guild_id, voice_channel_id)
-
-        wait_for(
-          fn -> Voice.ready?(msg.guild_id) end,
-          @ready_step,
-          @ready_retries
-        )
-
+        wait_for_join(msg)
         if(query, do: add_to_queue(msg, query))
         handle_lock(msg)
     end
