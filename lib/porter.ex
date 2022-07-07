@@ -88,7 +88,6 @@ defmodule AudioPlayerConsumer do
     else
       [] ->
         Lock.unlock(msg.guild_id)
-        Voice.leave_channel(msg.guild_id)
         nil
     end
   end
@@ -108,23 +107,24 @@ defmodule AudioPlayerConsumer do
   def prepare_channel(msg, query \\ nil) do
     voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
 
-    with voice_channel_id <- voice_channel do
-      Voice.join_channel(msg.guild_id, voice_channel_id)
-
-      wait_for(
-        fn -> Voice.ready?(msg.guild_id) end,
-        @ready_step,
-        @ready_retries
-      )
-
-      if(query, do: add_to_queue(msg, query))
-      handle_lock(msg)
-    else
+    case voice_channel do
       nil ->
         Api.create_message!(
           msg.channel_id,
           "❌ You have to be in a voice channel to play music"
         )
+
+      voice_channel_id ->
+        Voice.join_channel(msg.guild_id, voice_channel_id)
+
+        wait_for(
+          fn -> Voice.ready?(msg.guild_id) end,
+          @ready_step,
+          @ready_retries
+        )
+
+        if(query, do: add_to_queue(msg, query))
+        handle_lock(msg)
     end
   end
 
