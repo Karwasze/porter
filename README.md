@@ -8,7 +8,6 @@ A music playing Discord bot
 
 Adds a song to the queue, if the queue is empty it also plays the song.
 
-
 ### ```!play```
 
 Plays the current song in the queue.

@@ -188,6 +188,30 @@ defmodule AudioPlayerConsumer do
 
         Api.create_message!(msg.channel_id, message)
 
+      "!help" ->
+        message = """
+        Available commands:
+        **!play <query>**
+        Adds a song to the queue, if the queue is empty it also plays the song.
+
+        **!play**
+        Plays the current song in the queue.
+
+        **!stop**
+        Stops the current song. This command does **not** remove the song from the queue.
+
+        **!skip**
+        Skips the current song.
+
+        **!queue**
+        Shows current songs in the queue.
+
+        **!leave**
+        Removes Porter from the audio channel.
+        """
+
+        Api.create_message!(msg.channel_id, message)
+
       _ ->
         :ignore
     end
