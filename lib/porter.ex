@@ -45,6 +45,7 @@ defmodule AudioPlayerConsumer do
   def get_voice_channel_of_interaction(guild_id, user_id) do
     guild_id
     |> GuildCache.get!()
+    |> IO.inspect()
     |> Map.get(:voice_states)
     |> Enum.find(%{}, fn v -> v.user_id == user_id end)
     |> Map.get(:channel_id)
@@ -87,6 +88,7 @@ defmodule AudioPlayerConsumer do
     else
       [] ->
         Lock.unlock(msg.guild_id)
+        Voice.leave_channel(msg.guild_id)
         nil
     end
   end
