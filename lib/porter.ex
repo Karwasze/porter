@@ -77,8 +77,9 @@ defmodule AudioPlayerConsumer do
     Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
   end
 
-  def handle_stop_reason(:stopped, msg),
-    do: Lock.unlock(msg.guild_id)
+  def handle_stop_reason(:stopped, _msg),
+    # do: Lock.unlock(msg.guild_id)
+    do: nil
 
   def handle_stop_reason(_, msg) do
     Queue.remove(msg.guild_id)
@@ -128,7 +129,17 @@ defmodule AudioPlayerConsumer do
       voice_channel_id ->
         Voice.join_channel(msg.guild_id, voice_channel_id)
         wait_for_join(msg)
-        if(query, do: add_to_queue(msg, query))
+
+        if query do
+          add_to_queue(msg, query)
+        else
+          case StopReason.get(msg.guild_id) do
+            :stopped -> Lock.unlock(msg.guild_id)
+            :skipped -> Lock.unlock(msg.guild_id)
+            _ -> nil
+          end
+        end
+
         handle_lock(msg)
     end
   end
