@@ -113,6 +113,8 @@ defmodule AudioPlayerConsumer do
     else
       [] ->
         Lock.unlock(msg.guild_id)
+        Voice.leave_channel(msg.guild_id)
+        Api.create_message(msg.channel_id, "ℹ️ Leaving voice channel")
         nil
     end
   end
