@@ -241,32 +241,6 @@ defmodule AudioPlayerConsumer do
 
         Api.create_message!(msg.channel_id, message)
 
-      "!" <> number ->
-        case number do
-          "1" ->
-            leave_channel(msg)
-            Process.sleep(1000)
-            prepare_channel(msg, "isolated_special")
-
-          "2" ->
-            leave_channel(msg)
-            Process.sleep(1000)
-            prepare_channel(msg, "masquerade_special")
-
-          "3" ->
-            leave_channel(msg)
-            Process.sleep(1000)
-            prepare_channel(msg, "explosion_special")
-
-          "4" ->
-            leave_channel(msg)
-            Process.sleep(1000)
-            prepare_channel(msg, "redline_special")
-
-          _ ->
-            nil
-        end
-
       "!help" ->
         init_if_new_guild(msg.guild_id)
 
@@ -296,17 +270,37 @@ defmodule AudioPlayerConsumer do
         **!2**
         Plays Masquerade Violation
 
-        **!2**
+        **!3**
         Plays Kalwi & Remi - Explosion
 
-        **!2**
+        **!4**
         Plays REDLINE OST - Yellow Line
         """
 
         Api.create_message!(msg.channel_id, message)
 
+      "!1" ->
+        leave_channel(msg)
+        Process.sleep(1000)
+        prepare_channel(msg, "isolated_special")
+
+      "!2" ->
+        leave_channel(msg)
+        Process.sleep(1000)
+        prepare_channel(msg, "masquerade_special")
+
+      "!3" ->
+        leave_channel(msg)
+        Process.sleep(1000)
+        prepare_channel(msg, "explosion_special")
+
+      "!4" ->
+        leave_channel(msg)
+        Process.sleep(1000)
+        prepare_channel(msg, "redline_special")
+
       _ ->
-        :ignore
+        nil
     end
   end
 
