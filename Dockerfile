@@ -1,8 +1,8 @@
 FROM bitwalker/alpine-elixir:1.13.4
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 ENV YTDL_PATH=/usr/bin/yt-dlp
+ARG DISCORD_TOKEN
 RUN apk add ffmpeg yt-dlp
-ENV DISCORD_TOKEN=""
 
 COPY mix.exs .
 COPY mix.lock .
