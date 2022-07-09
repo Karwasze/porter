@@ -265,16 +265,16 @@ defmodule AudioPlayerConsumer do
         Removes Porter from the audio channel.
 
         **!1**
-        Plays Chiasm - Isolated
+        Plays **Chiasm - Isolated**
 
         **!2**
-        Plays Masquerade Violation
+        Plays **Masquerade Violation**
 
         **!3**
-        Plays Kalwi & Remi - Explosion
+        Plays **Kalwi & Remi - Explosion**
 
         **!4**
-        Plays REDLINE OST - Yellow Line
+        Plays **REDLINE OST - Yellow Line**
         """
 
         Api.create_message!(msg.channel_id, message)
