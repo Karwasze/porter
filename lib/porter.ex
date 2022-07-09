@@ -96,6 +96,11 @@ defmodule AudioPlayerConsumer do
         Queue.add(msg.guild_id, song)
         Api.create_message(msg.channel_id, "🦇🦇🦇 **MASQUERADE VIOLATION** 🦇🦇🦇")
 
+      "santa_monica_special" ->
+        song = {"https://www.youtube.com/watch?v=VuXD3jTDqqU", "Santa Monica Theme"}
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "🦇🦇🦇 **GROŹNY WAMPIREK UWAGA** 🦇🦇🦇")
+
       "explosion_special" ->
         song = {"https://www.youtube.com/watch?v=4qae2BKuDEQ", "Kalwi & Remi - Explosion"}
         Queue.add(msg.guild_id, song)
@@ -106,6 +111,35 @@ defmodule AudioPlayerConsumer do
         Queue.add(msg.guild_id, song)
         Api.create_message(msg.channel_id, "🚗🚗🚗 **REDLINE OST** 🚗🚗🚗")
 
+      "drive_special" ->
+        song =
+          {"https://www.youtube.com/watch?v=-DSVDcw6iW8",
+           "College & Electric Youth - A Real Hero (Drive Original Movie Soundtrack)"}
+
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "**🚗 PRAWDZIWA 🚗 LUDZKA 🚗 FASOLA**")
+
+      "evangelion_special" ->
+        song =
+          {"https://www.youtube.com/watch?v=zc6KUlXP--M",
+           "The End Of Evangelion: Komm, süsser Tod"}
+
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "**Wskakuj do robota Shinji**")
+
+      "alert_special" ->
+        song =
+          {"https://www.youtube.com/watch?v=OQiDzSWLIm4", "Metal Gear Solid Music - Alert Phase"}
+
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "**🔔❗**")
+
+      "alien_special" ->
+        song = {"https://www.youtube.com/watch?v=kurAJvAHB6I", "bogos binted?"}
+
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "**👽**")
+
       _ ->
         {url, name} = Utils.search(query)
         Queue.add(msg.guild_id, {url, name})
@@ -114,7 +148,6 @@ defmodule AudioPlayerConsumer do
   end
 
   def handle_stop_reason(:stopped, _msg),
-    # do: Lock.unlock(msg.guild_id)
     do: nil
 
   def handle_stop_reason(_, msg) do
@@ -136,9 +169,6 @@ defmodule AudioPlayerConsumer do
     else
       [] ->
         Lock.unlock(msg.guild_id)
-        Voice.leave_channel(msg.guild_id)
-        Api.create_message(msg.channel_id, "ℹ️ Leaving voice channel")
-        nil
     end
   end
 
@@ -182,7 +212,7 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def leave_channel(msg) do
+  def stop_and_clear_queue(msg) do
     init_if_new_guild(msg.guild_id)
     Voice.stop(msg.guild_id)
     Queue.remove_all(msg.guild_id)
@@ -222,11 +252,7 @@ defmodule AudioPlayerConsumer do
         end
 
       "!leave" ->
-        init_if_new_guild(msg.guild_id)
-        Voice.stop(msg.guild_id)
-        Queue.remove_all(msg.guild_id)
-        Lock.unlock(msg.guild_id)
-        StopReason.set_finished(msg.guild_id)
+        stop_and_clear_queue(msg.guild_id)
         Voice.leave_channel(msg.guild_id)
 
       "!queue" ->
@@ -271,33 +297,61 @@ defmodule AudioPlayerConsumer do
         Plays **Masquerade Violation**
 
         **!3**
-        Plays **Kalwi & Remi - Explosion**
+        Plays **Santa Monica Theme Violation**
 
         **!4**
+        Plays **Kalwi & Remi - Explosion**
+
+        **!5**
         Plays **REDLINE OST - Yellow Line**
+
+        **!6**
+        Plays **College & Electric Youth - A Real Hero**
+
+        **!7**
+        Plays **The End Of Evangelion: Komm, süsser Tod**
+
+        **!8**
+        Plays **Metal Gear Solid Music - Alert Phase**
         """
 
         Api.create_message!(msg.channel_id, message)
 
       "!1" ->
-        leave_channel(msg)
-        Process.sleep(1000)
+        stop_and_clear_queue(msg)
         prepare_channel(msg, "isolated_special")
 
       "!2" ->
-        leave_channel(msg)
-        Process.sleep(1000)
+        stop_and_clear_queue(msg)
         prepare_channel(msg, "masquerade_special")
 
       "!3" ->
-        leave_channel(msg)
-        Process.sleep(1000)
-        prepare_channel(msg, "explosion_special")
+        stop_and_clear_queue(msg)
+        prepare_channel(msg, "santa_monica_special")
 
       "!4" ->
-        leave_channel(msg)
-        Process.sleep(1000)
+        stop_and_clear_queue(msg)
+        prepare_channel(msg, "explosion_special")
+
+      "!5" ->
+        stop_and_clear_queue(msg)
         prepare_channel(msg, "redline_special")
+
+      "!6" ->
+        stop_and_clear_queue(msg)
+        prepare_channel(msg, "drive_special")
+
+      "!7" ->
+        stop_and_clear_queue(msg)
+        prepare_channel(msg, "evangelion_special")
+
+      "👽" ->
+        stop_and_clear_queue(msg)
+        prepare_channel(msg, "alien_special")
+
+      "!alert" ->
+        stop_and_clear_queue(msg)
+        prepare_channel(msg, "alert_special")
 
       _ ->
         nil
