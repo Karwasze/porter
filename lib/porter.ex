@@ -192,7 +192,6 @@ defmodule AudioPlayerConsumer do
 
       "!leave" ->
         init_if_new_guild(msg.guild_id)
-        StopReason.set_stopped(msg.guild_id)
         Voice.stop(msg.guild_id)
         Queue.remove_all(msg.guild_id)
         Lock.unlock(msg.guild_id)
