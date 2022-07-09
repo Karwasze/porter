@@ -35,6 +35,19 @@ defmodule AudioPlayerConsumer do
     Consumer.start_link(__MODULE__)
   end
 
+  def initialized?(guild_id) do
+    case StopReason.get(guild_id) do
+      nil -> false
+      _ -> true
+    end
+  end
+
+  def init_if_new_guild(guild_id) do
+    unless initialized?(guild_id) do
+      init_queue(guild_id)
+    end
+  end
+
   def init_queue(guild_id) do
     Queue.init(guild_id)
     StopReason.init(guild_id)
@@ -147,18 +160,22 @@ defmodule AudioPlayerConsumer do
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
       "!play" ->
+        init_if_new_guild(msg.guild_id)
         prepare_channel(msg)
 
       "!play" <> query ->
+        init_if_new_guild(msg.guild_id)
         prepare_channel(msg, query)
 
       "!stop" ->
+        init_if_new_guild(msg.guild_id)
         StopReason.set_stopped(msg.guild_id)
         Voice.stop(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
         Api.create_message(msg.channel_id, "⏹️ **#{name}** stopped")
 
       "!skip" ->
+        init_if_new_guild(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
         StopReason.set_skipped(msg.guild_id)
         Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
@@ -172,12 +189,14 @@ defmodule AudioPlayerConsumer do
         end
 
       "!leave" ->
+        init_if_new_guild(msg.guild_id)
         StopReason.set_stopped(msg.guild_id)
         Voice.stop(msg.guild_id)
         Queue.remove_all(msg.guild_id)
         Voice.leave_channel(msg.guild_id)
 
       "!queue" ->
+        init_if_new_guild(msg.guild_id)
         queue = Queue.print_queue(msg.guild_id)
 
         message =
@@ -189,6 +208,8 @@ defmodule AudioPlayerConsumer do
         Api.create_message!(msg.channel_id, message)
 
       "!help" ->
+        init_if_new_guild(msg.guild_id)
+
         message = """
         Available commands:
         **!play <query>**
