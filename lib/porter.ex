@@ -44,11 +44,11 @@ defmodule AudioPlayerConsumer do
 
   def init_if_new_guild(guild_id) do
     unless initialized?(guild_id) do
-      init_queue(guild_id)
+      init_agents(guild_id)
     end
   end
 
-  def init_queue(guild_id) do
+  def init_agents(guild_id) do
     Queue.init(guild_id)
     StopReason.init(guild_id)
     Lock.init(guild_id)
@@ -244,7 +244,7 @@ defmodule AudioPlayerConsumer do
   def handle_event({:READY, %{guilds: guilds} = _event, _ws_state}) do
     guilds
     |> Enum.map(fn guild -> guild.id end)
-    |> Enum.each(&init_queue/1)
+    |> Enum.each(&init_agents/1)
   end
 
   def handle_event(_event) do
