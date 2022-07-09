@@ -85,9 +85,32 @@ defmodule AudioPlayerConsumer do
   end
 
   def add_to_queue(msg, query) do
-    {url, name} = Utils.search(query)
-    Queue.add(msg.guild_id, {url, name})
-    Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
+    case query do
+      "isolated_special" ->
+        song = {"https://www.youtube.com/watch?v=uoUCyrg5Syo", "Chiasm - Isolated"}
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "🦇🦇🦇 **GROŹNY WAMPIREK UWAGA** 🦇🦇🦇")
+
+      "masquerade_special" ->
+        song = {"https://www.youtube.com/watch?v=9cAd0noZxH4", "Masquerade violation"}
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "🦇🦇🦇 **MASQUERADE VIOLATION** 🦇🦇🦇")
+
+      "explosion_special" ->
+        song = {"https://www.youtube.com/watch?v=4qae2BKuDEQ", "Kalwi & Remi - Explosion"}
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "🧨🧨🧨 **EXPLOSION** 🧨🧨🧨")
+
+      "redline_special" ->
+        song = {"https://www.youtube.com/watch?v=doEwWzMz99A", "REDLINE OST - Yellow Line"}
+        Queue.add(msg.guild_id, song)
+        Api.create_message(msg.channel_id, "🚗🚗🚗 **REDLINE OST** 🚗🚗🚗")
+
+      _ ->
+        {url, name} = Utils.search(query)
+        Queue.add(msg.guild_id, {url, name})
+        Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
+    end
   end
 
   def handle_stop_reason(:stopped, _msg),
@@ -159,6 +182,14 @@ defmodule AudioPlayerConsumer do
     end
   end
 
+  def leave_channel(msg) do
+    init_if_new_guild(msg.guild_id)
+    Voice.stop(msg.guild_id)
+    Queue.remove_all(msg.guild_id)
+    Lock.unlock(msg.guild_id)
+    StopReason.set_finished(msg.guild_id)
+  end
+
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
       "!play" ->
@@ -210,6 +241,32 @@ defmodule AudioPlayerConsumer do
 
         Api.create_message!(msg.channel_id, message)
 
+      "!" <> number ->
+        case number do
+          "1" ->
+            leave_channel(msg)
+            Process.sleep(1000)
+            prepare_channel(msg, "isolated_special")
+
+          "2" ->
+            leave_channel(msg)
+            Process.sleep(1000)
+            prepare_channel(msg, "masquerade_special")
+
+          "3" ->
+            leave_channel(msg)
+            Process.sleep(1000)
+            prepare_channel(msg, "explosion_special")
+
+          "4" ->
+            leave_channel(msg)
+            Process.sleep(1000)
+            prepare_channel(msg, "redline_special")
+
+          _ ->
+            nil
+        end
+
       "!help" ->
         init_if_new_guild(msg.guild_id)
 
@@ -232,6 +289,18 @@ defmodule AudioPlayerConsumer do
 
         **!leave**
         Removes Porter from the audio channel.
+
+        **!1**
+        Plays Chiasm - Isolated
+
+        **!2**
+        Plays Masquerade Violation
+
+        **!2**
+        Plays Kalwi & Remi - Explosion
+
+        **!2**
+        Plays REDLINE OST - Yellow Line
         """
 
         Api.create_message!(msg.channel_id, message)
