@@ -212,6 +212,22 @@ defmodule AudioPlayerConsumer do
     end
   end
 
+  def join_before_leaving(msg) do
+    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+
+    case voice_channel do
+      nil ->
+        Api.create_message!(
+          msg.channel_id,
+          "❌ You have to be in the same voice channel as bot to leave"
+        )
+
+      voice_channel_id ->
+        Voice.join_channel(msg.guild_id, voice_channel_id)
+        wait_for_join(msg)
+    end
+  end
+
   def stop_and_clear_queue(msg) do
     init_if_new_guild(msg.guild_id)
     Voice.stop(msg.guild_id)
@@ -252,6 +268,7 @@ defmodule AudioPlayerConsumer do
         end
 
       "!leave" ->
+        join_before_leaving(msg)
         stop_and_clear_queue(msg)
         Voice.leave_channel(msg.guild_id)
         Api.create_message!(msg.channel_id, "ℹ️ Leaving voice channel")
