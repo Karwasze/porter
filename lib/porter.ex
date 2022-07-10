@@ -254,6 +254,7 @@ defmodule AudioPlayerConsumer do
       "!leave" ->
         stop_and_clear_queue(msg)
         Voice.leave_channel(msg.guild_id)
+        Api.create_message!(msg.channel_id, "ℹ️ Leaving voice channel")
 
       "!queue" ->
         init_if_new_guild(msg.guild_id)
