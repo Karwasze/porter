@@ -42,17 +42,17 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def init_if_new_guild(msg) do
-    unless initialized?(msg.guild_id) do
-      init_agents(msg)
+  def init_if_new_guild(guild_id) do
+    unless initialized?(guild_id) do
+      init_agents(guild_id)
     end
   end
 
-  def init_agents(msg) do
-    Queue.init(msg.guild_id)
-    StopReason.init(msg.guild_id)
-    Lock.init(msg.guild_id)
-    msg.guild_id |> IO.inspect(label: "guild id: ")
+  def init_agents(guild_id) do
+    Queue.init(guild_id)
+    StopReason.init(guild_id)
+    Lock.init(guild_id)
+    guild_id |> IO.inspect(label: "guild id: ")
   end
 
   def get_voice_channel_of_interaction(guild_id, user_id) do
@@ -213,7 +213,7 @@ defmodule AudioPlayerConsumer do
   end
 
   def stop_and_clear_queue(msg) do
-    init_if_new_guild(msg)
+    init_if_new_guild(msg.guild_id)
     Voice.stop(msg.guild_id)
     Queue.remove_all(msg.guild_id)
     Lock.unlock(msg.guild_id)
@@ -223,22 +223,22 @@ defmodule AudioPlayerConsumer do
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
       "!play" ->
-        init_if_new_guild(msg)
+        init_if_new_guild(msg.guild_id)
         prepare_channel(msg)
 
       "!play" <> query ->
-        init_if_new_guild(msg)
+        init_if_new_guild(msg.guild_id)
         prepare_channel(msg, query)
 
       "!stop" ->
-        init_if_new_guild(msg)
+        init_if_new_guild(msg.guild_id)
         StopReason.set_stopped(msg.guild_id)
         Voice.stop(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
         Api.create_message(msg.channel_id, "⏹️ **#{name}** stopped")
 
       "!skip" ->
-        init_if_new_guild(msg)
+        init_if_new_guild(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
         StopReason.set_skipped(msg.guild_id)
         Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
@@ -256,7 +256,7 @@ defmodule AudioPlayerConsumer do
         Voice.leave_channel(msg.guild_id)
 
       "!queue" ->
-        init_if_new_guild(msg)
+        init_if_new_guild(msg.guild_id)
         queue = Queue.print_queue(msg.guild_id)
 
         message =
