@@ -252,7 +252,7 @@ defmodule AudioPlayerConsumer do
         end
 
       "!leave" ->
-        stop_and_clear_queue(msg.guild_id)
+        stop_and_clear_queue(msg)
         Voice.leave_channel(msg.guild_id)
 
       "!queue" ->
