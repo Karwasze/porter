@@ -72,13 +72,13 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def wait_for_end(msg) do
-    wait_for(fn -> !Voice.playing?(msg.guild_id) end, @ended_step, @ended_retries)
+  def wait_for_end(guild_id) do
+    wait_for(fn -> !Voice.playing?(guild_id) end, @ended_step, @ended_retries)
   end
 
-  def wait_for_join(msg) do
+  def wait_for_join(guild_id) do
     wait_for(
-      fn -> Voice.ready?(msg.guild_id) end,
+      fn -> Voice.ready?(guild_id) end,
       @ready_step,
       @ready_retries
     )
@@ -147,6 +147,11 @@ defmodule AudioPlayerConsumer do
     end
   end
 
+  def add_to_queue_from_playlist(msg, query) do
+    {url, name} = Utils.search(query)
+    Queue.add(msg.guild_id, {url, name})
+  end
+
   def handle_stop_reason(:stopped, _msg),
     do: nil
 
@@ -162,7 +167,7 @@ defmodule AudioPlayerConsumer do
       StopReason.set_finished(msg.guild_id)
 
       Voice.play(msg.guild_id, url, :ytdl)
-      wait_for_end(msg)
+      wait_for_end(msg.guild_id)
 
       StopReason.get(msg.guild_id)
       |> handle_stop_reason(msg)
@@ -184,7 +189,7 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def prepare_channel(msg, query \\ nil) do
+  def prepare_channel(msg) do
     voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
 
     case voice_channel do
@@ -196,19 +201,71 @@ defmodule AudioPlayerConsumer do
 
       voice_channel_id ->
         Voice.join_channel(msg.guild_id, voice_channel_id)
-        wait_for_join(msg)
+        wait_for_join(msg.guild_id)
 
-        if query do
-          add_to_queue(msg, query)
-        else
-          case StopReason.get(msg.guild_id) do
-            :stopped -> Lock.unlock(msg.guild_id)
-            :skipped -> Lock.unlock(msg.guild_id)
-            _ -> nil
-          end
+        case StopReason.get(msg.guild_id) do
+          :stopped -> Lock.unlock(msg.guild_id)
+          :skipped -> Lock.unlock(msg.guild_id)
+          _ -> nil
         end
 
         handle_lock(msg)
+    end
+  end
+
+  def prepare_channel(msg, query) do
+    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+
+    case voice_channel do
+      nil ->
+        Api.create_message!(
+          msg.channel_id,
+          "❌ You have to be in a voice channel to play music"
+        )
+
+      voice_channel_id ->
+        Voice.join_channel(msg.guild_id, voice_channel_id)
+        wait_for_join(msg.guild_id)
+        add_to_queue(msg, query)
+        handle_lock(msg)
+    end
+  end
+
+  def prepare_channel_playlist(msg, playlist) do
+    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+    playlist = playlist |> String.trim()
+
+    case Base.decode64(playlist) do
+      {:ok, decoded_playlist} ->
+        [playlist_name | decoded_playlist] =
+          decoded_playlist
+          |> String.split("\n")
+
+        Api.create_message!(
+          msg.channel_id,
+          "ℹ️ Processing **#{playlist_name}** playlist (it may take a while)."
+        )
+
+        case voice_channel do
+          nil ->
+            Api.create_message!(
+              msg.channel_id,
+              "❌ You have to be in a voice channel to play music"
+            )
+
+          voice_channel_id ->
+            Voice.join_channel(msg.guild_id, voice_channel_id)
+            wait_for_join(msg.guild_id)
+            Enum.each(decoded_playlist, fn url -> add_to_queue_from_playlist(msg, url) end)
+            Api.create_message(msg.channel_id, "ℹ️ **#{playlist_name}** added")
+            handle_lock(msg)
+        end
+
+      :error ->
+        Api.create_message!(
+          msg.channel_id,
+          "❌ Failed to decode playlist in base64 format."
+        )
     end
   end
 
@@ -224,7 +281,7 @@ defmodule AudioPlayerConsumer do
 
       voice_channel_id ->
         Voice.join_channel(msg.guild_id, voice_channel_id)
-        wait_for_join(msg)
+        wait_for_join(msg.guild_id)
     end
   end
 
@@ -238,6 +295,10 @@ defmodule AudioPlayerConsumer do
 
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
+      "!playlist" <> playlist ->
+        init_if_new_guild(msg.guild_id)
+        prepare_channel_playlist(msg, playlist)
+
       "!play" ->
         init_if_new_guild(msg.guild_id)
         prepare_channel(msg)
