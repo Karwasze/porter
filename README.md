@@ -12,7 +12,7 @@ Adds a song to the queue, if the queue is empty it also plays the song.
 
 Plays the current song in the queue.
 
-### ```!playlist```
+### ```!playlist <playlist>```
 
 Adds a prepared playlist to the queue. A playlist is a base64 encoded string comprised of a title and YouTube urls separated by newlines. Example: 
 
