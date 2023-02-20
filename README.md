@@ -34,6 +34,22 @@ Shows current songs in the queue.
 
 Removes the bot from the audio channel.
 
+### ```!nightcore```
+
+Adds a nightcore filter
+
+### ```!bassboost```
+
+Adds a bassboost mode
+
+### ```!filters```
+
+Shows currently applied filters
+
+### ```!remove_filters```
+
+Removes all filters
+
 ## Installation
 
 ### Prerequisites
