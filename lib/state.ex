@@ -100,7 +100,7 @@ defmodule State do
   end
 
   def remove_all_filters(id) do
-    update_map_value(id, :filter, [])
+    update_map_value(id, :filters, [])
   end
 
   def update_map_value(index, key, new_value) do
