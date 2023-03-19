@@ -11,7 +11,7 @@ defmodule AudioPlayerSupervisor do
 
   @impl true
   def init(_init_arg) do
-    children = [AudioPlayerConsumer, Queue, StopReason, Lock]
+    children = [AudioPlayerConsumer, Queue, StopReason, Lock, Filters]
 
     Supervisor.init(children, strategy: :one_for_one)
   end
@@ -21,130 +21,18 @@ defmodule AudioPlayerConsumer do
   use Nostrum.Consumer
 
   alias Nostrum.Api
-  alias Nostrum.Cache.GuildCache
   alias Nostrum.Voice
 
   require Logger
-
-  @ended_retries 14400
-  @ended_step 1000
-  @ready_retries 20
-  @ready_step 100
 
   def start_link do
     Consumer.start_link(__MODULE__)
   end
 
-  def initialized?(guild_id) do
-    case StopReason.get(guild_id) do
-      nil -> false
-      _ -> true
-    end
-  end
-
-  def init_if_new_guild(guild_id) do
-    unless initialized?(guild_id) do
-      init_agents(guild_id)
-    end
-  end
-
-  def init_agents(guild_id) do
-    Queue.init(guild_id)
-    StopReason.init(guild_id)
-    Lock.init(guild_id)
-    guild_id |> IO.inspect(label: "guild id: ")
-  end
-
-  def get_voice_channel_of_interaction(guild_id, user_id) do
-    guild_id
-    |> GuildCache.get!()
-    |> Map.get(:voice_states)
-    |> Enum.find(%{}, fn v -> v.user_id == user_id end)
-    |> Map.get(:channel_id)
-  end
-
-  def wait_for(function, step, retries) do
-    for _ <- 0..retries do
-      case function.() do
-        true -> :ok
-        false -> Process.sleep(step)
-      end
-    end
-  end
-
-  def wait_for_end(guild_id) do
-    wait_for(fn -> !Voice.playing?(guild_id) end, @ended_step, @ended_retries)
-  end
-
-  def wait_for_join(guild_id) do
-    wait_for(
-      fn -> Voice.ready?(guild_id) end,
-      @ready_step,
-      @ready_retries
-    )
-  end
-
   def add_to_queue(msg, query) do
-    case query do
-      "isolated_special" ->
-        song = {"https://www.youtube.com/watch?v=uoUCyrg5Syo", "Chiasm - Isolated"}
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "🦇🦇🦇 **GROŹNY WAMPIREK UWAGA** 🦇🦇🦇")
-
-      "masquerade_special" ->
-        song = {"https://www.youtube.com/watch?v=9cAd0noZxH4", "Masquerade violation"}
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "🦇🦇🦇 **MASQUERADE VIOLATION** 🦇🦇🦇")
-
-      "santa_monica_special" ->
-        song = {"https://www.youtube.com/watch?v=VuXD3jTDqqU", "Santa Monica Theme"}
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "🦇🦇🦇 **GROŹNY WAMPIREK UWAGA** 🦇🦇🦇")
-
-      "explosion_special" ->
-        song = {"https://www.youtube.com/watch?v=4qae2BKuDEQ", "Kalwi & Remi - Explosion"}
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "🧨🧨🧨 **EXPLOSION** 🧨🧨🧨")
-
-      "redline_special" ->
-        song = {"https://www.youtube.com/watch?v=doEwWzMz99A", "REDLINE OST - Yellow Line"}
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "🚗🚗🚗 **REDLINE OST** 🚗🚗🚗")
-
-      "drive_special" ->
-        song =
-          {"https://www.youtube.com/watch?v=-DSVDcw6iW8",
-           "College & Electric Youth - A Real Hero (Drive Original Movie Soundtrack)"}
-
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "**🚗 PRAWDZIWA 🚗 LUDZKA 🚗 FASOLA**")
-
-      "evangelion_special" ->
-        song =
-          {"https://www.youtube.com/watch?v=zc6KUlXP--M",
-           "The End Of Evangelion: Komm, süsser Tod"}
-
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "**Wskakuj do robota Shinji**")
-
-      "alert_special" ->
-        song =
-          {"https://www.youtube.com/watch?v=OQiDzSWLIm4", "Metal Gear Solid Music - Alert Phase"}
-
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "**🔔❗**")
-
-      "alien_special" ->
-        song = {"https://www.youtube.com/watch?v=kurAJvAHB6I", "bogos binted?"}
-
-        Queue.add(msg.guild_id, song)
-        Api.create_message(msg.channel_id, "**👽**")
-
-      _ ->
-        {url, name} = Utils.search(query)
-        Queue.add(msg.guild_id, {url, name})
-        Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
-    end
+    {url, name} = Utils.search(query)
+    Queue.add(msg.guild_id, {url, name})
+    Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
   end
 
   def add_to_queue_from_playlist(msg, query) do
@@ -158,16 +46,23 @@ defmodule AudioPlayerConsumer do
   def handle_stop_reason(_, msg) do
     Queue.remove(msg.guild_id)
     Lock.unlock(msg.guild_id)
-    handle_lock(msg)
+    play_if_possible(msg)
   end
 
   def play(msg) do
     with {url, name} <- Queue.get(msg.guild_id) do
       Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url}")
       StopReason.set_finished(msg.guild_id)
+      filters = Utils.get_filters(msg.guild_id)
+
+      if filters != "" do
+        Voice.play(msg.guild_id, url, :ytdl, realtime: false, filter: filters)
+      else
+        Voice.play(msg.guild_id, url, :ytdl)
+      end
 
       Voice.play(msg.guild_id, url, :ytdl)
-      wait_for_end(msg.guild_id)
+      Utils.wait_for_end(msg.guild_id)
 
       StopReason.get(msg.guild_id)
       |> handle_stop_reason(msg)
@@ -177,7 +72,7 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def handle_lock(msg) do
+  def play_if_possible(msg) do
     case Lock.get(msg.guild_id) do
       :locked ->
         nil
@@ -189,50 +84,7 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def prepare_channel(msg) do
-    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
-
-    case voice_channel do
-      nil ->
-        Api.create_message!(
-          msg.channel_id,
-          "❌ You have to be in a voice channel to play music"
-        )
-
-      voice_channel_id ->
-        Voice.join_channel(msg.guild_id, voice_channel_id)
-        wait_for_join(msg.guild_id)
-
-        case StopReason.get(msg.guild_id) do
-          :stopped -> Lock.unlock(msg.guild_id)
-          :skipped -> Lock.unlock(msg.guild_id)
-          _ -> nil
-        end
-
-        handle_lock(msg)
-    end
-  end
-
-  def prepare_channel(msg, query) do
-    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
-
-    case voice_channel do
-      nil ->
-        Api.create_message!(
-          msg.channel_id,
-          "❌ You have to be in a voice channel to play music"
-        )
-
-      voice_channel_id ->
-        Voice.join_channel(msg.guild_id, voice_channel_id)
-        wait_for_join(msg.guild_id)
-        add_to_queue(msg, query)
-        handle_lock(msg)
-    end
-  end
-
-  def prepare_channel_playlist(msg, playlist) do
-    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
+  def add_playlist(msg, playlist) do
     playlist = playlist |> String.trim()
 
     case Base.decode64(playlist) do
@@ -246,20 +98,8 @@ defmodule AudioPlayerConsumer do
           "ℹ️ Processing **#{playlist_name}** playlist (it may take a while)."
         )
 
-        case voice_channel do
-          nil ->
-            Api.create_message!(
-              msg.channel_id,
-              "❌ You have to be in a voice channel to play music"
-            )
-
-          voice_channel_id ->
-            Voice.join_channel(msg.guild_id, voice_channel_id)
-            wait_for_join(msg.guild_id)
-            Enum.each(decoded_playlist, fn url -> add_to_queue_from_playlist(msg, url) end)
-            Api.create_message(msg.channel_id, "ℹ️ **#{playlist_name}** added")
-            handle_lock(msg)
-        end
+        Enum.each(decoded_playlist, fn url -> add_to_queue_from_playlist(msg, url) end)
+        Api.create_message(msg.channel_id, "ℹ️ **#{playlist_name}** added")
 
       :error ->
         Api.create_message!(
@@ -269,53 +109,41 @@ defmodule AudioPlayerConsumer do
     end
   end
 
-  def join_before_leaving(msg) do
-    voice_channel = get_voice_channel_of_interaction(msg.guild_id, msg.author.id)
-
-    case voice_channel do
-      nil ->
-        Api.create_message!(
-          msg.channel_id,
-          "❌ You have to be in the same voice channel as bot to leave"
-        )
-
-      voice_channel_id ->
-        Voice.join_channel(msg.guild_id, voice_channel_id)
-        wait_for_join(msg.guild_id)
-    end
-  end
-
-  def stop_and_clear_queue(msg) do
-    init_if_new_guild(msg.guild_id)
-    Voice.stop(msg.guild_id)
-    Queue.remove_all(msg.guild_id)
-    Lock.unlock(msg.guild_id)
-    StopReason.set_finished(msg.guild_id)
-  end
-
   def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
     case msg.content do
       "!playlist" <> playlist ->
-        init_if_new_guild(msg.guild_id)
-        prepare_channel_playlist(msg, playlist)
+        Utils.init_if_new_guild(msg.guild_id)
+        Utils.join_voice_channel(msg)
+        add_playlist(msg, playlist)
+        play_if_possible(msg)
 
       "!play" ->
-        init_if_new_guild(msg.guild_id)
-        prepare_channel(msg)
+        Utils.init_if_new_guild(msg.guild_id)
+        Utils.join_voice_channel(msg)
+
+        case StopReason.get(msg.guild_id) do
+          :stopped -> Lock.unlock(msg.guild_id)
+          :skipped -> Lock.unlock(msg.guild_id)
+          _ -> nil
+        end
+
+        play_if_possible(msg)
 
       "!play" <> query ->
-        init_if_new_guild(msg.guild_id)
-        prepare_channel(msg, query)
+        Utils.init_if_new_guild(msg.guild_id)
+        Utils.join_voice_channel(msg)
+        add_to_queue(msg, query)
+        play_if_possible(msg)
 
       "!stop" ->
-        init_if_new_guild(msg.guild_id)
+        Utils.init_if_new_guild(msg.guild_id)
         StopReason.set_stopped(msg.guild_id)
         Voice.stop(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
         Api.create_message(msg.channel_id, "⏹️ **#{name}** stopped")
 
       "!skip" ->
-        init_if_new_guild(msg.guild_id)
+        Utils.init_if_new_guild(msg.guild_id)
         {_url, name} = Queue.get(msg.guild_id)
         StopReason.set_skipped(msg.guild_id)
         Api.create_message(msg.channel_id, "⏩ **#{name}** skipped")
@@ -325,17 +153,37 @@ defmodule AudioPlayerConsumer do
           Voice.stop(msg.guild_id)
         else
           Queue.remove(msg.guild_id)
-          handle_lock(msg)
+          play_if_possible(msg)
         end
 
+      "!nightcore" ->
+        Filters.add(msg.guild_id, :nightcore)
+        Api.create_message(msg.channel_id, "**Nightcore mode enabled**")
+
+      "!bassboost" ->
+        Filters.add(msg.guild_id, :bassboost)
+        Api.create_message(msg.channel_id, "**BassBoost mode enabled**")
+
+      "!filters" ->
+        filters = Filters.get_all(msg.guild_id)
+        Api.create_message(msg.channel_id, "**Current filters:** #{Enum.join(filters, ", ")}")
+
+      "!remove_filters" ->
+        Filters.remove_all(msg.guild_id)
+        Api.create_message(msg.channel_id, "**Removed all filters!**")
+
       "!leave" ->
-        join_before_leaving(msg)
-        stop_and_clear_queue(msg)
+        Utils.join_voice_channel(
+          msg,
+          "❌ You have to be in the same voice channel as bot to leave"
+        )
+
+        Utils.stop_and_clear_queue(msg)
         Voice.leave_channel(msg.guild_id)
         Api.create_message!(msg.channel_id, "ℹ️ Leaving voice channel")
 
       "!queue" ->
-        init_if_new_guild(msg.guild_id)
+        Utils.init_if_new_guild(msg.guild_id)
         queue = Queue.print_queue(msg.guild_id)
 
         message =
@@ -347,7 +195,7 @@ defmodule AudioPlayerConsumer do
         Api.create_message!(msg.channel_id, message)
 
       "!help" ->
-        init_if_new_guild(msg.guild_id)
+        Utils.init_if_new_guild(msg.guild_id)
 
         message = """
         Available commands:
@@ -373,68 +221,20 @@ defmodule AudioPlayerConsumer do
         **!leave**
         Removes Porter from the audio channel.
 
-        **!1**
-        Plays **Chiasm - Isolated**
+        **!nightcore**
+        Adds a nightcore filter
 
-        **!2**
-        Plays **Masquerade Violation**
+        **!bassboost**
+        Adds a bassboost mode
 
-        **!3**
-        Plays **Santa Monica Theme Violation**
+        **!filters**
+        Shows currently applied filters
 
-        **!4**
-        Plays **Kalwi & Remi - Explosion**
-
-        **!5**
-        Plays **REDLINE OST - Yellow Line**
-
-        **!6**
-        Plays **College & Electric Youth - A Real Hero**
-
-        **!7**
-        Plays **The End Of Evangelion: Komm, süsser Tod**
-
-        **!alert**
-        Plays **Metal Gear Solid Music - Alert Phase**
+        **!remove_filters
+        Removes all filters
         """
 
         Api.create_message!(msg.channel_id, message)
-
-      "!1" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "isolated_special")
-
-      "!2" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "masquerade_special")
-
-      "!3" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "santa_monica_special")
-
-      "!4" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "explosion_special")
-
-      "!5" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "redline_special")
-
-      "!6" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "drive_special")
-
-      "!7" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "evangelion_special")
-
-      "👽" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "alien_special")
-
-      "!alert" ->
-        stop_and_clear_queue(msg)
-        prepare_channel(msg, "alert_special")
 
       _ ->
         nil
@@ -444,7 +244,7 @@ defmodule AudioPlayerConsumer do
   def handle_event({:READY, %{guilds: guilds} = _event, _ws_state}) do
     guilds
     |> Enum.map(fn guild -> guild.id end)
-    |> Enum.each(&init_agents/1)
+    |> Enum.each(&Utils.init_agents/1)
   end
 
   def handle_event(_event) do
