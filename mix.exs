@@ -21,7 +21,7 @@ defmodule Porter.MixProject do
 
   defp deps do
     [
-      {:nostrum, github: "Kraigie/nostrum"}
+      {:nostrum, github: "Karwasze/nostrum", branch: "v0.7.0-http1-hotfix"}
     ]
   end
 end
