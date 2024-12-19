@@ -7,6 +7,7 @@ defmodule Utils do
   alias Nostrum.Api
   alias Nostrum.Cache.GuildCache
   alias Nostrum.Voice
+  require Logger
 
   def search(query) do
     case System.cmd("yt-dlp", [
@@ -52,7 +53,7 @@ defmodule Utils do
     StopReason.init(guild_id)
     Lock.init(guild_id)
     Filters.init(guild_id)
-    guild_id |> IO.inspect(label: "guild id: ")
+    Logger.info("Guild ID: #{guild_id}")
   end
 
   def get_voice_channel_of_interaction(guild_id, user_id) do
@@ -118,7 +119,6 @@ defmodule Utils do
   def get_filters(id) do
     filters = Filters.get_all(id)
 
-    Enum.map(filters, fn filter -> convert_atom_to_filter(filter) end)
-    |> Enum.join(",")
+    Enum.map_join(filters, fn filter -> convert_atom_to_filter(filter) end, ",")
   end
 end

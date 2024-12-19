@@ -5,7 +5,7 @@ defmodule Porter.MixProject do
     [
       app: :porter,
       version: "0.1.0",
-      elixir: "~> 1.13",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -14,14 +14,15 @@ defmodule Porter.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {AudioPlayerSupervisor, []},
+      mod: {MyApp.Application, []},
       extra_applications: [:logger]
     ]
   end
 
   defp deps do
     [
-      {:nostrum, github: "Karwasze/nostrum", branch: "v0.7.0-http1-hotfix"}
+      {:nostrum, github: "Kraigie/nostrum", branch: "master"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 end

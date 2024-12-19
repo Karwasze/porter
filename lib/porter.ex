@@ -1,19 +1,9 @@
-defmodule AudioPlayerSupervisor do
-  use Supervisor
+defmodule MyApp.Application do
+  use Application
 
-  def start(_mode, args) do
-    Supervisor.start_link(__MODULE__, args, name: __MODULE__)
-  end
-
-  def start_link(args) do
-    Supervisor.start_link(__MODULE__, args, name: __MODULE__)
-  end
-
-  @impl true
-  def init(_init_arg) do
+  def start(_type, _args) do
     children = [AudioPlayerConsumer, Queue, StopReason, Lock, Filters]
-
-    Supervisor.init(children, strategy: :one_for_one)
+    Supervisor.start_link(children, strategy: :one_for_one)
   end
 end
 
@@ -25,25 +15,25 @@ defmodule AudioPlayerConsumer do
 
   require Logger
 
-  def start_link do
-    Consumer.start_link(__MODULE__)
-  end
-
   def add_to_queue(msg, query) do
+    Logger.info("Adding to queue - message: #{msg.content}, query: #{query}")
     {url, name} = Utils.search(query)
     Queue.add(msg.guild_id, {url, name})
     Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
   end
 
   def add_to_queue_from_playlist(msg, query) do
+    Logger.info("Adding to queue from playlist - message: #{msg.content}, query: #{query}")
     {url, name} = Utils.search(query)
     Queue.add(msg.guild_id, {url, name})
   end
 
-  def handle_stop_reason(:stopped, _msg),
-    do: nil
+  def handle_stop_reason(:stopped, _msg) do
+    Logger.info("Handling stop reason: stopped")
+  end
 
   def handle_stop_reason(_, msg) do
+    Logger.info("Handling stop reason: other")
     Queue.remove(msg.guild_id)
     Lock.unlock(msg.guild_id)
     play_if_possible(msg)
@@ -53,15 +43,26 @@ defmodule AudioPlayerConsumer do
     with {url, name} <- Queue.get(msg.guild_id) do
       Api.create_message(msg.channel_id, "🎶 Now playing **#{name}** - #{url}")
       StopReason.set_finished(msg.guild_id)
+      Logger.info("Getting filters")
       filters = Utils.get_filters(msg.guild_id)
 
       if filters != "" do
-        Voice.play(msg.guild_id, url, :ytdl, realtime: false, filter: filters)
+        Logger.info("Playing with filters: #{filters}")
+
+        case Voice.play(msg.guild_id, url, :ytdl, realtime: false, filter: filters) do
+          :ok -> Logger.info("Voice.play() successful")
+          {:error, reason} -> Logger.error("Voice.play() unsuccessful, #{reason}")
+        end
       else
-        Voice.play(msg.guild_id, url, :ytdl)
+        Logger.info("Playing without filters")
+
+        case Voice.play(msg.guild_id, "./test.mp3", :url) do
+          :ok -> Logger.info("Voice.play() successful #{msg.guild_id}, #{url}")
+          {:error, reason} -> Logger.error("Voice.play() unsuccessful, #{reason}")
+        end
       end
 
-      Voice.play(msg.guild_id, url, :ytdl)
+      Logger.info("Waiting for end")
       Utils.wait_for_end(msg.guild_id)
 
       StopReason.get(msg.guild_id)
@@ -75,12 +76,24 @@ defmodule AudioPlayerConsumer do
   def play_if_possible(msg) do
     case Lock.get(msg.guild_id) do
       :locked ->
-        nil
+        Logger.info("Lock is locked for #{msg.guild_id}")
 
       :unlocked ->
+        Logger.info("Lock is unlocked for #{msg.guild_id}")
+        Logger.info("Setting StopReason to finished for #{msg.guild_id}")
         StopReason.set_finished(msg.guild_id)
+        Logger.info("Locking lock for #{msg.guild_id}")
         Lock.lock(msg.guild_id)
-        play(msg)
+        Logger.info("Checking if voice is playing for #{msg.guild_id}")
+
+        case Voice.playing?(msg.guild_id) do
+          true ->
+            Logger.info("Voice is already playing for #{msg.guild_id}")
+
+          false ->
+            Logger.info("Running play(msg) for #{msg.guild_id}")
+            play(msg)
+        end
     end
   end
 
@@ -235,6 +248,29 @@ defmodule AudioPlayerConsumer do
         """
 
         Api.create_message!(msg.channel_id, message)
+
+      "!test" ->
+        Logger.info("Creating test message")
+        Api.create_message!(msg.channel_id, "Test")
+        Logger.info("Joining new guild")
+        Utils.init_if_new_guild(msg.guild_id)
+        Logger.info("Joining voice channel")
+        Utils.join_voice_channel(msg)
+
+        case Nostrum.Voice.ready?(msg.guild_id) do
+          true -> Logger.info("Voice ready")
+          false -> Logger.info("Voice not ready")
+        end
+
+        case Voice.play(
+               msg.guild_id,
+               "https://file-examples.com/storage/fefaeec240676402c9bdb74/2017/11/file_example_MP3_700KB.mp3",
+               :url,
+               volume: 10
+             ) do
+          :ok -> Logger.info("Playing succeeded")
+          {:error, reason} -> Logger.info("Playing failed: #{reason}")
+        end
 
       _ ->
         nil
