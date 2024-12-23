@@ -50,15 +50,15 @@ defmodule AudioPlayerConsumer do
         Logger.info("Playing with filters: #{filters}")
 
         case Voice.play(msg.guild_id, url, :ytdl, realtime: false, filter: filters) do
-          :ok -> Logger.info("Voice.play() successful")
-          {:error, reason} -> Logger.error("Voice.play() unsuccessful, #{reason}")
+          :ok -> Logger.info("Voice.play() with filters successful")
+          {:error, reason} -> Logger.error("Voice.play() with filters unsuccessful, #{reason}")
         end
       else
         Logger.info("Playing without filters")
 
-        case Voice.play(msg.guild_id, "./test.mp3", :url) do
-          :ok -> Logger.info("Voice.play() successful #{msg.guild_id}, #{url}")
-          {:error, reason} -> Logger.error("Voice.play() unsuccessful, #{reason}")
+        case Voice.play(msg.guild_id, url, :ytdl) do
+          :ok -> Logger.info("Voice.play() with filters successful #{msg.guild_id}, #{url}")
+          {:error, reason} -> Logger.error("Voice.play() with filters aunsuccessful, #{reason}")
         end
       end
 

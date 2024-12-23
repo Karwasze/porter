@@ -119,6 +119,7 @@ defmodule Utils do
   def get_filters(id) do
     filters = Filters.get_all(id)
 
-    Enum.map_join(filters, fn filter -> convert_atom_to_filter(filter) end, ",")
+    Enum.map(filters, fn filter -> convert_atom_to_filter(filter) end)
+    |> Enum.join(",")
   end
 end
