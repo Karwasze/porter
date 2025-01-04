@@ -21,7 +21,7 @@ defmodule Porter.MixProject do
 
   defp deps do
     [
-      {:nostrum, github: "Kraigie/nostrum", branch: "master"},
+      {:nostrum, github: "BrandtHill/nostrum", branch: "master"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end

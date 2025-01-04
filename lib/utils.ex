@@ -10,8 +10,9 @@ defmodule Utils do
   require Logger
 
   def search(query) do
+    Logger.info("Searching for query: #{query}")
     case System.cmd("yt-dlp", [
-           "ytsearch:#{query}",
+           "ytsearch1:#{query}",
            "--flat-playlist",
            "--print",
            "url",
@@ -27,6 +28,8 @@ defmodule Utils do
           |> String.split(" ")
           |> List.delete_at(-1)
           |> Enum.join(" ")
+
+        Logger.info("Query #{query} found: #{url} #{name}")
 
         {url, name}
 

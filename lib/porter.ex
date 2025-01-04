@@ -57,8 +57,8 @@ defmodule AudioPlayerConsumer do
         Logger.info("Playing without filters")
 
         case Voice.play(msg.guild_id, url, :ytdl) do
-          :ok -> Logger.info("Voice.play() with filters successful #{msg.guild_id}, #{url}")
-          {:error, reason} -> Logger.error("Voice.play() with filters aunsuccessful, #{reason}")
+          :ok -> Logger.info("Voice.play() without filters successful #{msg.guild_id}, #{url}")
+          {:error, reason} -> Logger.error("Voice.play() without filters unsuccessful, #{reason}")
         end
       end
 
@@ -248,30 +248,6 @@ defmodule AudioPlayerConsumer do
         """
 
         Api.create_message!(msg.channel_id, message)
-
-      "!test" ->
-        Logger.info("Creating test message")
-        Api.create_message!(msg.channel_id, "Test")
-        Logger.info("Joining new guild")
-        Utils.init_if_new_guild(msg.guild_id)
-        Logger.info("Joining voice channel")
-        Utils.join_voice_channel(msg)
-
-        case Nostrum.Voice.ready?(msg.guild_id) do
-          true -> Logger.info("Voice ready")
-          false -> Logger.info("Voice not ready")
-        end
-
-        case Voice.play(
-               msg.guild_id,
-               "https://file-examples.com/storage/fefaeec240676402c9bdb74/2017/11/file_example_MP3_700KB.mp3",
-               :url,
-               volume: 10
-             ) do
-          :ok -> Logger.info("Playing succeeded")
-          {:error, reason} -> Logger.info("Playing failed: #{reason}")
-        end
-
       _ ->
         nil
     end
