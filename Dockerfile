@@ -2,7 +2,7 @@ FROM bitwalker/alpine-elixir:1.13.4 AS base
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 ENV YTDL_PATH=/usr/bin/yt-dlp
 ARG DISCORD_TOKEN
-RUN apk add ffmpeg==4.4.5 py3-pip gcc libc-dev g++ python3-dev
+RUN apk add ffmpeg py3-pip gcc libc-dev g++ python3-dev
 RUN python3 -m pip install --no-cache-dir --force-reinstall "yt-dlp>2024"
 
 COPY mix.exs .
