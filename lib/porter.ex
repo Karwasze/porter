@@ -17,15 +17,23 @@ defmodule AudioPlayerConsumer do
 
   def add_to_queue(msg, query) do
     Logger.info("Adding to queue - message: #{msg.content}, query: #{query}")
-    {url, name} = Utils.search(query)
-    Queue.add(msg.guild_id, {url, name})
-    Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
+    case Utils.search(query) do
+      {:err, error} ->
+        Api.create_message(msg.channel_id, "#{error}")
+      {url, name} ->
+        Queue.add(msg.guild_id, {url, name})
+        Api.create_message(msg.channel_id, "ℹ️ **#{name}** added")
+    end
   end
 
   def add_to_queue_from_playlist(msg, query) do
     Logger.info("Adding to queue from playlist - message: #{msg.content}, query: #{query}")
-    {url, name} = Utils.search(query)
-    Queue.add(msg.guild_id, {url, name})
+    case Utils.search(query) do
+      {:err, error} ->
+        Api.create_message(msg.channel_id, "#{error}")
+      {url, name} ->
+        Queue.add(msg.guild_id, {url, name})
+    end
   end
 
   def handle_stop_reason(:stopped, _msg) do

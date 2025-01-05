@@ -13,12 +13,14 @@ defmodule Utils do
     Logger.info("Searching for query: #{query}")
     case System.cmd("yt-dlp", [
            "ytsearch1:#{query}",
-           "--flat-playlist",
            "--print",
-           "url",
+           "original_url",
            "--print",
-           "filename"
-         ]) do
+           "filename",
+           "--quiet"
+    ], stderr_to_stdout: true) do
+      {"", 0} ->
+        {:err, "No results for query: **#{query}**, try using a different query"}
       {result, 0} ->
         result = String.split(result, ~r{\n}, trim: true)
         url = List.first(result)
@@ -33,8 +35,12 @@ defmodule Utils do
 
         {url, name}
 
-      {error, _} ->
-        {:err, error}
+      {error, 1} ->
+        if String.contains?(error, "Sign in to confirm your age") do
+          {:err, "❌ Cannot play age restricted videos"}
+        else
+          {:err, error}
+        end
     end
   end
 
